@@ -1,65 +1,51 @@
 import streamlit as st
 import pandas as pd
 import os  
+import urllib.parse
 
 # 1. CONFIGURACIÓN VISUAL
 st.set_page_config(
     page_title="Runistic", 
     page_icon="🧬", 
     layout="centered",
-    initial_sidebar_state="collapsed" # Inicia con el menú cerrado para parecer más App
+    initial_sidebar_state="expanded" # <--- CAMBIO: Ahora siempre estará abierta
 )
 
-# --- ESTILOS PARA APARIENCIA DE APP NATIVA ---
+# --- ESTILOS LIMPIOS PERO CON BARRA VISIBLE ---
 hide_st_style = """
     <style>
-    /* Ocultar elementos de Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     .stDeployButton {display:none;}
-    
-    /* Fondo y texto general */
     .stApp { background-color: #0E1117; color: white; }
     
-    /* Tarjetas de métricas (Metrics) */
     [data-testid="stMetric"] {
         background-color: #1E1E1E;
         padding: 15px;
         border-radius: 15px;
         border: 1px solid #333;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
-    }
-    
-    /* Ajuste de botones para que parezcan de App */
-    .stButton > button {
-        width: 100%;
-        border-radius: 25px;
-        height: 3em;
-        background-color: #e74c3c;
-        color: white;
-        border: none;
     }
     </style>
     """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# 2. NAVEGACIÓN LATERAL
-st.sidebar.title("🧬 Runistic App")
-menu = st.sidebar.radio("Menú de Entrenamiento", 
-    ["Dashboard", "Mi Macrociclo", "Mi Fase Actual", "Mis Zonas", "Calculadora de Carrera", "Biblioteca de Sesiones", "Academia"])
-
-# 3. LÓGICA DE DATOS (Excel)
+# 2. LÓGICA DE DATOS (Movida arriba para que el selector aparezca primero)
 archivo_excel = "atletas_runistic.xlsm"
 
 if os.path.exists(archivo_excel):
     try:
         df_atletas = pd.read_excel(archivo_excel)
-        seleccion = st.sidebar.selectbox("Seleccionar Atleta", df_atletas["Nombre"], key="selector_principal")
+        # El selector ahora es lo primero que verás en la barra lateral
+        seleccion = st.sidebar.selectbox(
+            "👤 Seleccionar Atleta", 
+            df_atletas["Nombre"], 
+            key="selector_principal"
+        )
         
         datos = df_atletas[df_atletas["Nombre"] == seleccion].iloc[0]
         
-        # Extracción de variables
+        # Variables del Excel
         nombre_atleta = datos["Nombre"]
         carrera = datos["Meta"]
         fase = datos["Fase"]
@@ -73,13 +59,22 @@ if os.path.exists(archivo_excel):
         nombre_atleta, carrera, fase, semana, total_semanas, umbral_ritmo, mensaje_semanal = "Error", "N/A", "N/A", 0, 0, 4.0, "Revisa tu Excel"
 else:
     st.sidebar.warning(f"No se encontró {archivo_excel}.")
-    nombre_atleta, carrera, fase, semana, total_semanas, umbral_ritmo, mensaje_semanal = "Demo", "Maratón", "Base", 1, 16, 4.30, "Bienvenido a la demo."
+    nombre_atleta, carrera, fase, semana, total_semanas, umbral_ritmo, mensaje_semanal = "Demo", "Maratón", "Base", 1, 16, 4.30, "Bienvenido."
+
+# 3. NAVEGACIÓN LATERAL (Debajo del selector)
+st.sidebar.markdown("---")
+menu = st.sidebar.radio("🧭 Navegación", 
+    ["Dashboard", "Mi Macrociclo", "Mi Fase Actual", "Mis Zonas", "Calculadora de Carrera", "Biblioteca de Sesiones", "Academia"])
 
 # 4. MÓDULOS DE LA APP
 if menu == "Dashboard":
     st.title(f"Hola, {nombre_atleta}")
-    st.markdown(f"**🎯 Próximo objetivo:** {carrera}")
+    st.markdown(f"**🎯 Objetivo:** {carrera}")
     
+    progreso = semana / total_semanas
+    st.progress(progreso)
+    st.caption(f"Progreso del plan: {int(progreso*100)}%")
+
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
     col1.metric("Fase", fase)
@@ -89,12 +84,22 @@ if menu == "Dashboard":
     st.markdown("### 🚀 Enfoque Semanal")
     st.info(mensaje_semanal)
     
-    st.markdown("### 🔑 Sesiones Clave")
-    st.write("📖 Consulta la **Biblioteca** para detalles técnicos.")
+    st.markdown("---")
+    # BOTÓN DE WHATSAPP (Asegúrate de poner tu número real abajo)
+    numero_coach = "52449XXXXXXX" 
+    mensaje_wa = urllib.parse.quote(f"Hola Coach Arturo, soy {nombre_atleta}. Tengo una duda sobre mi fase de {fase}.")
+    link_wa = f"https://wa.me/{numero_coach}?text={mensaje_wa}"
+    
+    st.markdown(f'''
+        <a href="{link_wa}" target="_blank">
+            <button style="width:100%; border-radius:25px; background-color:#25D366; color:white; font-weight:bold; border:none; height:3em; cursor:pointer;">
+                💬 Hablar con mi Coach
+            </button>
+        </a>
+        ''', unsafe_allow_html=True)
 
 elif menu == "Mi Macrociclo":
     st.header("📍 Mi Macrociclo")
-    st.write(f"Planificación estratégica para {nombre_atleta}.")
     fases_macro = [
         {"fase": "Base", "obj": "Capacidad aeróbica", "estado": "Actual" if fase == "Base" else "Completado"},
         {"fase": "Específica", "obj": "Ritmos de carrera", "estado": "Actual" if fase == "Específica" else "Pendiente"},
@@ -102,19 +107,9 @@ elif menu == "Mi Macrociclo":
     ]
     st.table(pd.DataFrame(fases_macro))
 
-elif menu == "Mi Fase Actual":
-    st.header(f"Fase: {fase}")
-    st.markdown(f"**Análisis Fisiológico para {nombre_atleta}:**")
-    if "Base" in fase:
-        st.write("Estamos construyendo mitocondrias. El enfoque es volumen a baja intensidad.")
-    elif "Específica" in fase:
-        st.write("Enfoque en tolerancia al lactato y ritmos específicos de competencia.")
-    else:
-        st.write("Fase de ajuste. Escucha a tu cuerpo y prioriza la recuperación.")
-
 elif menu == "Mis Zonas":
     st.header("📊 Zonas de Entrenamiento")
-    st.write(f"Cálculos personalizados (Umbral: {umbral_ritmo})")
+    st.write(f"Cálculos para {nombre_atleta} (Umbral: {umbral_ritmo})")
     zonas_data = {
         "Zona": ["Z1", "Z2", "Z3", "Z4", "Z5"],
         "Ritmo sugerido": [
@@ -124,44 +119,30 @@ elif menu == "Mis Zonas":
             f"{umbral_ritmo - 0.05:.2f} - {umbral_ritmo + 0.10:.2f}",
             f"< {umbral_ritmo - 0.10:.2f}"
         ],
-        "Esfuerzo (RPE)": ["1-3", "4-5", "6", "7-8", "9-10"]
+        "RPE": ["1-3", "4-5", "6", "7-8", "9-10"]
     }
     st.table(pd.DataFrame(zonas_data))
 
 elif menu == "Calculadora de Carrera":
     st.header("🏁 Proyector de Tiempos")
-    st.write(f"Proyecciones para un umbral de **{umbral_ritmo} min/km**.")
-
-    ritmo_10k = umbral_ritmo * 0.96
-    ritmo_21k = umbral_ritmo * 1.05
-    ritmo_42k = umbral_ritmo * 1.15
-
+    ritmo_10k, ritmo_21k, ritmo_42k = umbral_ritmo * 0.96, umbral_ritmo * 1.05, umbral_ritmo * 1.15
     col1, col2, col3 = st.columns(3)
     with col1:
-        t_10k = ritmo_10k * 10
-        st.metric("Meta 10K", f"{int(t_10k // 60)}h {int(t_10k % 60)}m")
-        st.caption(f"Paso: {ritmo_10k:.2f}")
+        t = ritmo_10k * 10
+        st.metric("Meta 10K", f"{int(t//60)}h {int(t%60)}m")
     with col2:
-        t_21k = ritmo_21k * 21.097
-        st.metric("Meta 21K", f"{int(t_21k // 60)}h {int(t_21k % 60)}m")
-        st.caption(f"Paso: {ritmo_21k:.2f}")
+        t = ritmo_21k * 21.097
+        st.metric("Meta 21K", f"{int(t//60)}h {int(t%60)}m")
     with col3:
-        t_42k = ritmo_42k * 42.195
-        st.metric("Meta 42K", f"{int(t_42k // 60)}h {int(t_42k % 60)}m")
-        st.caption(f"Paso: {ritmo_42k:.2f}")
+        t = ritmo_42k * 42.195
+        st.metric("Meta 42K", f"{int(t//60)}h {int(t%60)}m")
 
 elif menu == "Biblioteca de Sesiones":
-    st.header("📚 Guía de Ejecución")
-    tipo = st.selectbox("Selecciona tipo de sesión:", ["Tempo", "Fondo", "Series VO2Max"])
-    if tipo == "Tempo":
-        st.info("Objetivo: Tolerancia al lactato. Esfuerzo 'cómodamente duro'.")
+    st.header("📚 Guía Técnica")
+    tipo = st.selectbox("Tipo de sesión:", ["Tempo", "Fondo", "Series VO2Max"])
+    if tipo == "Tempo": st.info("Esfuerzo 'cómodamente duro'. Tolerancia al lactato.")
 
 elif menu == "Academia":
     st.header("🎓 Academia Runistic")
-    st.write(f"Contenido para fase: **{fase}**")
     if "Base" in fase:
-        with st.expander("📝 Mitocondrias y Resistencia"):
-            st.write("La base aeróbica es el cimiento de tu rendimiento...")
-    if "Específica" in fase:
-        with st.expander("📝 Optimización de Glucógeno"):
-            st.write("Estrategias de carga para sesiones de alta intensidad...")
+        with st.expander("📝 Mitocondrias y Resistencia"): st.write("Explicación sobre la biogénesis mitocondrial...")
